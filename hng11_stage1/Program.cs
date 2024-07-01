@@ -1,4 +1,6 @@
+using hng11_stage1;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -7,6 +9,12 @@ var builder = WebApplication.CreateBuilder(args);
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.Configure<ForwardedHeadersOptions>(options => {
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+builder.Services.AddHttpClient<IpApiClient>();
 
 var app = builder.Build();
 
@@ -16,29 +24,19 @@ var app = builder.Build();
 
 app.UseHttpsRedirection();
 
-var summaries = new[]
+app.MapGet("/api/hello", async ([FromQuery] string visitor_name, HttpContext context, IpApiClient ipApiClient) =>
 {
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-
-
-app.MapGet("/api/hello", ([FromQuery] string visitor_name, HttpContext context) =>
-{
-    var ip = context.Connection.RemoteIpAddress;
+    var ipAddress = context.GetServerVariable("HTTP_X_FORWARDED_FOR") ?? context.Connection.RemoteIpAddress?.ToString();
+    var ipAddressWithoutPort = ipAddress?.Split(':')[0];
+    var ipApiResponse = await ipApiClient.Get(ipAddressWithoutPort, CancellationToken.None);
     return Results.Ok(new
     {
-        client_ip=ip,
-
-        greeting=$"Hello, ${visitor_name}, the temperature is 11 degrees Celsius in ${visitor_name}"
+        client_ip=ipApiResponse.query,
+        location=ipApiResponse.city,
+        greeting =$"Hello, {visitor_name}!, the temperature is 11 degrees Celsius in ${ipApiResponse.city}"
     });
 })
 .WithName("greetings")
 .WithOpenApi();
 
 app.Run();
-
-internal record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
