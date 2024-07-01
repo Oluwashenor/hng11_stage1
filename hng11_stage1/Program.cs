@@ -29,11 +29,14 @@ app.MapGet("/api/hello", async ([FromQuery] string visitor_name, HttpContext con
     var ipAddress = context.GetServerVariable("HTTP_X_FORWARDED_FOR") ?? context.Connection.RemoteIpAddress?.ToString();
     var ipAddressWithoutPort = ipAddress?.Split(':')[0];
     var ipApiResponse = await ipApiClient.Get(ipAddressWithoutPort, CancellationToken.None);
+    if (string.IsNullOrEmpty(visitor_name)) return Results.BadRequest("Name is required");
+    visitor_name = visitor_name.Replace("\"", "");
+
     return Results.Ok(new
     {
         client_ip=ipApiResponse.query,
         location=ipApiResponse.city,
-        greeting =$"Hello, {visitor_name}!, the temperature is 11 degrees Celsius in ${ipApiResponse.city}"
+        greeting =$"Hello, {visitor_name}!, the temperature is 11 degrees Celsius in {ipApiResponse.city}"
     });
 })
 .WithName("greetings")
